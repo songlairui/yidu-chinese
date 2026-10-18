@@ -41,5 +41,31 @@ class T(unittest.TestCase):
         self.assertEqual(L.lint("服务器昨晚重启了两次。原因是磁盘满了。"), [])
 
 
+class Exempt(unittest.TestCase):
+    def test_fenced_code(self):
+        self.assertEqual(L.lint("```\n赋能 综上所述\n```\n好。"), [])
+
+    def test_tilde_fence(self):
+        self.assertEqual(L.lint("~~~\n赋能\n~~~"), [])
+
+    def test_inline_code(self):
+        self.assertEqual(L.lint("词表里有 `赋能` 这个词。"), [])
+
+    def test_quote_block(self):
+        self.assertEqual(L.lint("> 综上所述，赋能。"), [])
+
+    def test_usage_line(self):
+        self.assertEqual(L.lint("用法：python3 x.py 赋能.md"), [])
+
+    def test_after_fence_still_checked(self):
+        self.assertEqual(L.lint("```\nx\n```\n赋能业务。")[0][0], 4)
+
+    def test_line_numbers_kept(self):
+        self.assertEqual(L.lint("> 引用\n\n综上所述。")[0][0], 3)
+
+    def test_no_exempt_option(self):
+        self.assertTrue(L.lint("`赋能`", exempt=False))
+
+
 if __name__ == "__main__":
     unittest.main()

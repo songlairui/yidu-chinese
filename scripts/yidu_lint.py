@@ -23,10 +23,36 @@ def load(name):
     return out
 
 
-def lint(text):
+INLINE_CODE = re.compile(r"`[^`\n]*`")
+USAGE_PREFIX = ("用法：", "用法:", "运行：", "运行:", "命令：", "命令:", "示例命令", "$ ", "python3 ", "python ")
+
+
+def mask_exempt(text):
+    """把豁免内容（围栏代码块、引用块、行内代码、用法说明）替换为空行/删除，保持行号不变。"""
+    out, fence = [], None
+    for ln in text.splitlines():
+        st = ln.lstrip()
+        m = re.match(r"(`{3,}|~{3,})", st)
+        if fence:
+            if m and m.group(1)[0] == fence[0] and len(m.group(1)) >= len(fence):
+                fence = None
+            out.append("")
+            continue
+        if m:
+            fence = m.group(1)
+            out.append("")
+            continue
+        if st.startswith(">") or st.startswith(USAGE_PREFIX):
+            out.append("")
+            continue
+        out.append(INLINE_CODE.sub("", ln))
+    return out
+
+
+def lint(text, exempt=True):
     """返回 [(行号, 类别, 命中)]"""
     hits = []
-    lines = text.splitlines()
+    lines = mask_exempt(text) if exempt else text.splitlines()
     for cat, fn in (("黑话", "buzzwords.txt"), ("套话", "filler.txt"), ("比喻动词", "metaphor_verbs.txt")):
         words = load(fn)
         for i, ln in enumerate(lines, 1):
