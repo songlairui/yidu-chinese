@@ -106,5 +106,43 @@ class Round2(unittest.TestCase):
         self.assertNotIn("破折号过多", cats("甲——乙。"))
 
 
+FIX = Path(__file__).resolve().parent / "fixtures"
+EXPECT = {
+    "ai_01": "黑话", "ai_02": "首先其次最后 堆叠", "ai_03": "不是…而是 滥用",
+    "ai_04": "emoji 过多", "ai_05": "破折号过多", "ai_06": "比喻动词",
+    "ai_07": "过度加粗", "ai_08": "过长句", "ai_09": "结尾套话",
+}
+
+
+class Fixtures(unittest.TestCase):
+    def test_ai_samples_hit_expected_rule(self):
+        for name, cat in EXPECT.items():
+            t = (FIX / (name + ".txt")).read_text(encoding="utf-8")
+            self.assertIn(cat, cats(t), name)
+
+    def test_human_samples_clean(self):
+        for f in FIX.glob("human_*.txt"):
+            self.assertEqual(L.lint(f.read_text(encoding="utf-8")), [], f.name)
+
+    def test_summarize(self):
+        self.assertEqual(L.summarize([(1, "a", "x"), (2, "a", "y"), (3, "b", "z")]), {"a": 2, "b": 1})
+
+    def test_json_output(self):
+        import io, json, contextlib
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            code = L.main(["x", "--json", str(FIX / "ai_01.txt")])
+        d = json.loads(buf.getvalue())
+        self.assertEqual(code, 1)
+        self.assertEqual(d["total"], sum(d["summary"].values()))
+        self.assertIn("黑话", d["summary"])
+        self.assertEqual(d["hits"][0].keys(), {"line": 0, "rule": 0, "match": 0}.keys())
+
+    def test_table_and_url_not_long_sentence(self):
+        row = "| " + " | ".join(["短格" * 10] * 4) + " |"
+        self.assertEqual(L.lint(row), [])
+        self.assertEqual(L.lint("来源 https://example.com/" + "a" * 100), [])
+
+
 if __name__ == "__main__":
     unittest.main()

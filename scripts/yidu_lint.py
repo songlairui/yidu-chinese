@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """易读中文 lint：检测中文常见 AI 腔。纯标准库。
-用法：python3 scripts/yidu_lint.py 文件.md   或   cat 文件 | python3 scripts/yidu_lint.py -
+用法：python3 scripts/yidu_lint.py [--json] 文件.md   或   cat 文件 | python3 scripts/yidu_lint.py -
 退出码：有命中为 1，无命中为 0。"""
+import json
 import re
 import sys
 from pathlib import Path
@@ -29,6 +30,7 @@ def load(name):
     return out
 
 
+URL = re.compile(r"https?://\S+")
 INLINE_CODE = re.compile(r"`[^`\n]*`")
 USAGE_PREFIX = ("用法：", "用法:", "运行：", "运行:", "命令：", "命令:", "示例命令", "$ ", "python3 ", "python ")
 
@@ -86,21 +88,42 @@ def lint(text, exempt=True):
     for i, ln in enumerate(lines, 1):
         if ln.lstrip().startswith(("#", "```")):
             continue
-        for s in re.split(r"[。！？!?；;]", ln):
+        ln = URL.sub("", ln)
+        for s in re.split(r"[。！？!?；;|]", ln):
             if len(s) > MAX_SENT:
                 hits.append((i, "过长句", s[:12] + "…(%d字)" % len(s)))
     return sorted(hits, key=lambda h: h[0])
 
 
+def summarize(hits):
+    """按规则汇总命中数。"""
+    out = {}
+    for _, cat, _ in hits:
+        out[cat] = out.get(cat, 0) + 1
+    return out
+
+
 def main(argv):
-    if len(argv) != 2:
+    args = argv[1:]
+    as_json = "--json" in args
+    args = [a for a in args if a != "--json"]
+    if len(args) != 1:
         print(__doc__)
         return 2
-    text = sys.stdin.read() if argv[1] == "-" else Path(argv[1]).read_text(encoding="utf-8")
+    text = sys.stdin.read() if args[0] == "-" else Path(args[0]).read_text(encoding="utf-8")
     hits = lint(text)
+    if as_json:
+        print(json.dumps({
+            "total": len(hits),
+            "summary": summarize(hits),
+            "hits": [{"line": i, "rule": c, "match": w} for i, c, w in hits],
+        }, ensure_ascii=False, indent=2))
+        return 1 if hits else 0
     for i, cat, w in hits:
         print("第%d行 [%s] %s" % (i, cat, w))
     print("共 %d 处" % len(hits))
+    for cat, n in sorted(summarize(hits).items(), key=lambda kv: -kv[1]):
+        print("  %s：%d" % (cat, n))
     return 1 if hits else 0
 
 
