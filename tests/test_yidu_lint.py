@@ -67,5 +67,44 @@ class Exempt(unittest.TestCase):
         self.assertTrue(L.lint("`赋能`", exempt=False))
 
 
+class Round2(unittest.TestCase):
+    def test_new_buzz(self):
+        self.assertIn("黑话", cats("我们要打出组合拳。"))
+
+    def test_new_filler(self):
+        self.assertIn("套话", cats("众所周知，水是湿的。"))
+
+    def test_new_metaphor(self):
+        self.assertIn("比喻动词", cats("数据谱写了新篇章。"))
+
+    def test_seq_stack(self):
+        t = "首先，备份。\n其次，升级。\n最后，重启。"
+        self.assertIn("首先其次最后 堆叠", cats(t))
+
+    def test_seq_partial_ok(self):
+        self.assertNotIn("首先其次最后 堆叠", cats("首先备份，然后升级。"))
+
+    def test_closer_help(self):
+        self.assertIn("结尾套话", cats("就这些。希望对你有帮助！"))
+
+    def test_closer_ask(self):
+        self.assertIn("结尾套话", cats("如有疑问，欢迎随时提问。"))
+
+    def test_closer_none(self):
+        self.assertNotIn("结尾套话", cats("这个脚本帮助我们备份。"))
+
+    def test_emoji_many(self):
+        self.assertIn("emoji 过多", cats("好🚀 快✨ 强💡"))
+
+    def test_emoji_few_ok(self):
+        self.assertNotIn("emoji 过多", cats("好🚀 快✨"))
+
+    def test_dash_many(self):
+        self.assertIn("破折号过多", cats("甲——乙。丙——丁。戊——己。"))
+
+    def test_dash_few_ok(self):
+        self.assertNotIn("破折号过多", cats("甲——乙。"))
+
+
 if __name__ == "__main__":
     unittest.main()

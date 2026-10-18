@@ -11,6 +11,12 @@ MAX_SENT = 60       # 单句超过此字数提示（经验阈值，可调，非�
 MAX_BOLD = 3        # 每篇加粗处超过此数提示
 NOT_BUT = re.compile(r"不是[^。！？\n]{1,30}?[，,]?\s*而是")
 NOT_BUT_LIMIT = 2   # 「不是…而是」出现多于此数视为滥用
+SEQ_WORDS = ("首先", "其次", "最后")   # 三者同时出现视为套路堆叠
+CLOSERS = re.compile(r"(希望(以上|这些|本文|这篇|这份|上述)?[^。！\n]{0,12}?(对你|对您|对大家)?有(所)?帮助|如有(任何)?(疑问|问题)[^。\n]{0,10}(随时|请)[^。\n]{0,10}|欢迎(随时)?(继续)?(提问|留言|交流)|祝(你|您)[^。\n]{0,8}(愉快|顺利))")
+EMOJI = re.compile("[\U0001F300-\U0001FAFF\u2600-\u27BF\u2B50\u2705\u274C]")
+EMOJI_LIMIT = 2
+DASH = re.compile("——")
+DASH_LIMIT = 2
 BOLD = re.compile(r"\*\*[^*\n]+\*\*")
 
 
@@ -65,6 +71,18 @@ def lint(text, exempt=True):
     bolds = [(i, m.group(0)) for i, ln in enumerate(lines, 1) for m in BOLD.finditer(ln)]
     if len(bolds) > MAX_BOLD:
         hits += [(i, "过度加粗", s) for i, s in bolds]
+    seq = [(i, w) for w in SEQ_WORDS for i, ln in enumerate(lines, 1) if w in ln]
+    if all(any(w == x for _, x in seq) for w in SEQ_WORDS):
+        hits += [(i, "首先其次最后 堆叠", w) for i, w in seq]
+    for i, ln in enumerate(lines, 1):
+        for m in CLOSERS.finditer(ln):
+            hits.append((i, "结尾套话", m.group(0)))
+    em = [(i, m.group(0)) for i, ln in enumerate(lines, 1) for m in EMOJI.finditer(ln)]
+    if len(em) > EMOJI_LIMIT:
+        hits += [(i, "emoji 过多", e) for i, e in em]
+    ds = [(i, "——") for i, ln in enumerate(lines, 1) for _ in DASH.finditer(ln)]
+    if len(ds) > DASH_LIMIT:
+        hits += [(i, "破折号过多", d) for i, d in ds]
     for i, ln in enumerate(lines, 1):
         if ln.lstrip().startswith(("#", "```")):
             continue
