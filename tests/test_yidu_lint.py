@@ -144,5 +144,44 @@ class Fixtures(unittest.TestCase):
         self.assertEqual(L.lint("来源 https://example.com/" + "a" * 100), [])
 
 
+
+class ProfileTests(unittest.TestCase):
+    def cats(self, t, profile=None):
+        return {c for _, c, _ in L.lint(t, profile=profile)}
+
+    def test_tech_skips_align(self):
+        t = "把两个字段对齐后再比较。"
+        self.assertIn("黑话", self.cats(t))
+        self.assertNotIn("黑话", self.cats(t, "tech"))
+
+    def test_tech_still_flags_other_buzzwords(self):
+        self.assertIn("黑话", self.cats("我们要赋能业务。", "tech"))
+
+    def test_formal_skips_lead(self):
+        t = "要发挥引领作用。"
+        self.assertIn("黑话", self.cats(t))
+        self.assertNotIn("黑话", self.cats(t, "formal"))
+
+    def test_skip_is_per_profile(self):
+        self.assertIn("黑话", self.cats("把字段对齐。", "formal"))
+
+    def test_long_sentence_threshold(self):
+        t = "甲" * 90 + "。"
+        self.assertIn("过长句", self.cats(t))
+        self.assertIn("过长句", self.cats(t, "essay"))
+        self.assertNotIn("过长句", self.cats(t, "tech"))
+        self.assertIn("过长句", self.cats(("甲" * 110) + "。", "tech"))
+        self.assertNotIn("过长句", self.cats(t, "formal"))
+        self.assertIn("过长句", self.cats(("甲" * 130) + "。", "formal"))
+
+    def test_cli_bad_profile(self):
+        self.assertEqual(L.main(["x", "--profile", "nope", "f.txt"]), 2)
+
+    def test_ai_fixtures_caught_under_all_profiles(self):
+        d = Path(__file__).resolve().parent / "fixtures"
+        for prof in (None, "tech", "formal", "essay"):
+            for f in sorted(d.glob("ai_*.txt")):
+                self.assertTrue(L.lint(f.read_text(encoding="utf-8"), profile=prof), (prof, f.name))
+
 if __name__ == "__main__":
     unittest.main()

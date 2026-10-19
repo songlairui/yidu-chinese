@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """易读中文 lint：检测中文常见 AI 腔。纯标准库。
-用法：python3 scripts/yidu_lint.py [--json] 文件.md   或   cat 文件 | python3 scripts/yidu_lint.py -
+用法：python3 scripts/yidu_lint.py [--json] [--profile tech|formal|essay] 文件.md   或   cat 文件 | python3 scripts/yidu_lint.py -
 退出码：有命中为 1，无命中为 0。"""
 import json
 import re
@@ -19,6 +19,14 @@ EMOJI_LIMIT = 2
 DASH = re.compile("——")
 DASH_LIMIT = 2
 BOLD = re.compile(r"\*\*[^*\n]+\*\*")
+
+
+# 场景参数。依据见 docs/TUNING.md；skip 为该场景下属于正常用词、不报的词。
+PROFILES = {
+    "essay": {"max_sent": 60, "skip": ()},
+    "tech": {"max_sent": 100, "skip": ("对齐", "沉淀", "链路")},
+    "formal": {"max_sent": 120, "skip": ("引领", "赛道", "抓手", "全方位", "赋予")},
+}
 
 
 def load(name):
@@ -57,12 +65,14 @@ def mask_exempt(text):
     return out
 
 
-def lint(text, exempt=True):
+def lint(text, exempt=True, profile=None):
     """返回 [(行号, 类别, 命中)]"""
     hits = []
+    prof = PROFILES[profile] if profile else {"max_sent": MAX_SENT, "skip": ()}
+    max_sent = prof["max_sent"]
     lines = mask_exempt(text) if exempt else text.splitlines()
     for cat, fn in (("黑话", "buzzwords.txt"), ("套话", "filler.txt"), ("比喻动词", "metaphor_verbs.txt")):
-        words = load(fn)
+        words = [w for w in load(fn) if w not in prof["skip"]]
         for i, ln in enumerate(lines, 1):
             for w in words:
                 if w in ln:
@@ -90,7 +100,7 @@ def lint(text, exempt=True):
             continue
         ln = URL.sub("", ln)
         for s in re.split(r"[。！？!?；;|]", ln):
-            if len(s) > MAX_SENT:
+            if len(s) > max_sent:
                 hits.append((i, "过长句", s[:12] + "…(%d字)" % len(s)))
     return sorted(hits, key=lambda h: h[0])
 
@@ -107,11 +117,19 @@ def main(argv):
     args = argv[1:]
     as_json = "--json" in args
     args = [a for a in args if a != "--json"]
+    profile = None
+    if "--profile" in args:
+        k = args.index("--profile")
+        if k + 1 >= len(args) or args[k + 1] not in PROFILES:
+            print("--profile 取值：" + "、".join(PROFILES))
+            return 2
+        profile = args[k + 1]
+        del args[k:k + 2]
     if len(args) != 1:
         print(__doc__)
         return 2
     text = sys.stdin.read() if args[0] == "-" else Path(args[0]).read_text(encoding="utf-8")
-    hits = lint(text)
+    hits = lint(text, profile=profile)
     if as_json:
         print(json.dumps({
             "total": len(hits),
